@@ -1,0 +1,53 @@
+NOTICE – Third-Party Software Attributions
+==========================================
+
+This product (MiniPACS) includes or bundles the following third-party
+open-source components. Their licenses and copyright notices are reproduced
+below or in the accompanying LICENSE_*.txt files.
+
+-------------------------------------------------------------------------------
+1. pynetdicom
+   Copyright (c) 2014-2024 Scaramallion and pynetdicom contributors
+   License: MIT
+   Homepage: https://github.com/pydicom/pynetdicom
+   License file: LICENSE_pynetdicom.txt
+
+2. pydicom
+   Copyright (c) 2008-2024 Darcy Mason and pydicom contributors
+   License: MIT
+   Homepage: https://github.com/pydicom/pydicom
+   License file: LICENSE_pydicom.txt
+
+3. Pillow (PIL Fork)
+   Copyright (c) 2010-2024 Jeffrey A. Clark and contributors
+   Portions Copyright (c) 1997-2011 Secret Labs AB
+   Portions Copyright (c) 1995-2011 Fredrik Lundh and contributors
+   License: HPND (Historical Permission Notice and Disclaimer)
+   Homepage: https://python-pillow.org/
+   License file: LICENSE_Pillow.txt
+
+4. PyInstaller
+   Copyright (c) 2010-2024 PyInstaller Development Team
+   License: GPL v2 with Classpath Exception
+   Homepage: https://pyinstaller.org/
+   Note: The PyInstaller bootloader is licensed under the Apache 2.0 License
+         when used in the "windowed" (--windowed) mode without modifying
+         PyInstaller itself.
+
+5. Python / Python Software Foundation (PSF)
+   Copyright (c) 2001-2024 Python Software Foundation
+   License: PSF License Agreement (BSD-compatible)
+   Homepage: https://www.python.org/
+
+6. NumPy
+   Copyright (c) 2005-2024 NumPy Developers
+   License: BSD 3-Clause
+   Homepage: https://numpy.org/
+
+-------------------------------------------------------------------------------
+Full license texts for pynetdicom, pydicom, and Pillow are included with
+this distribution in the files LICENSE_pynetdicom.txt, LICENSE_pydicom.txt,
+and LICENSE_Pillow.txt respectively.
+
+For PyInstaller and Python licenses, please refer to their respective
+project websites.
