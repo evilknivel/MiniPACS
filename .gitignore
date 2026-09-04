@@ -1,6 +1,7 @@
 # Build artifacts
 build/
 dist/
+release/
 *.spec.bak
 
 # PyInstaller generated spec (keep MiniPACS.spec, ignore auto-generated ones)

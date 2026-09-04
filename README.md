@@ -371,6 +371,16 @@ command line in sync with it.
 **Output:** `dist\MiniPACS.exe` — a single self-contained executable, no Python
 installation required on the target machine.
 
+### Packaging a release ZIP
+
+```
+release.bat 1.2.0
+```
+
+Builds the EXE, then bundles it with `README.md`, `LICENSE`, `NOTICE.txt`, and
+the third-party license files into `release\MiniPACS-1.2.0.zip`. Omit the
+version argument to get a date-stamped name (`MiniPACS-<yyyy.MM.dd>.zip`).
+
 ### Notes
 
 - UPX is enabled in the spec. If UPX is not on `PATH`, PyInstaller simply skips
