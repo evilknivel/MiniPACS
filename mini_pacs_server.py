@@ -469,91 +469,126 @@ def run_headless():
 
 def run_gui():
     import tkinter as tk
+    import tkinter.font as tkfont
     from tkinter import ttk, filedialog, messagebox, scrolledtext
     import numpy as np
 
-    # ---- Dark theme colors ----
-    BG = "#1e1e1e"
-    BG2 = "#252526"
-    BG3 = "#2d2d30"
-    FG = "#d4d4d4"
-    FG2 = "#9cdcfe"
-    ACCENT = "#007acc"
-    GREEN = "#4ec9b0"
-    RED = "#f44747"
-    ORANGE = "#ce9178"
+    # ---- Refined Dark Console palette ----
+    BG = "#16171a"        # window
+    BG2 = "#1e2023"       # panels / tree field
+    BG3 = "#25272b"       # raised strips, inputs, buttons
+    BORDER = "#34373d"    # input borders
+    FG = "#d6d7da"        # body text
+    FG2 = "#9a9da3"       # dim headings / labels
+    DIM = "#7c7f85"       # faint captions
+    ACCENT = "#e0a458"    # single warm accent
+    ACCENT_DK = "#c98f43"
+    GREEN = "#6bbf8a"
+    RED = "#e06c6c"
+    ORANGE = "#d9b877"
     YELLOW = "#dcdcaa"
-    TREE_SEL = "#094771"
-    TREE_ROW1 = "#1e1e1e"
-    TREE_ROW2 = "#252526"
+    TREE_SEL = "#3d3524"  # accent-tinted selection
+    TREE_ROW1 = "#1e2023"
+    TREE_ROW2 = "#232529"
 
     root = tk.Tk()
     root.title("MiniPACS Server")
     root.configure(bg=BG)
-    root.geometry("1280x800")
+    root.geometry("1280x820")
     root.minsize(900, 600)
+
+    # ---- Fonts: prefer a real mono for data, fall back gracefully ----
+    _fams = set(tkfont.families(root))
+
+    def _pick(cands, default):
+        return next((c for c in cands if c in _fams), default)
+
+    MONO = _pick(["JetBrains Mono", "Cascadia Mono", "Cascadia Code",
+                  "Consolas"], "Courier New")
+    UIF = _pick(["Segoe UI Variable Text", "Segoe UI"], "TkDefaultFont")
+    F_UI = (UIF, 9)
+    F_H = (UIF, 10, "bold")
+    F_MONO = (MONO, 9)
+    F_MONO_SM = (MONO, 8)
 
     # Style
     style = ttk.Style(root)
     style.theme_use("clam")
 
     style.configure(".", background=BG, foreground=FG, fieldbackground=BG3,
-                    troughcolor=BG3, bordercolor=BG3, darkcolor=BG3,
-                    lightcolor=BG3, selectbackground=TREE_SEL, selectforeground=FG)
+                    troughcolor=BG3, bordercolor=BORDER, darkcolor=BG3,
+                    lightcolor=BG3, selectbackground=TREE_SEL, selectforeground=FG,
+                    font=F_UI)
     style.configure("TFrame", background=BG)
     style.configure("TLabel", background=BG, foreground=FG)
     style.configure("TButton", background=BG3, foreground=FG, relief="flat",
-                    padding=4, borderwidth=0)
+                    padding=5, borderwidth=0)
     style.map("TButton",
-              background=[("active", ACCENT), ("pressed", "#005a9e")],
+              background=[("active", BORDER), ("pressed", "#3a3d44")],
               foreground=[("active", "#ffffff")])
+    style.configure("Accent.TButton", background=ACCENT, foreground=BG,
+                    relief="flat", padding=5, borderwidth=0, font=(UIF, 9, "bold"))
+    style.map("Accent.TButton",
+              background=[("active", ACCENT_DK), ("pressed", ACCENT_DK)],
+              foreground=[("active", BG)])
     style.configure("TEntry", fieldbackground=BG3, foreground=FG, insertcolor=FG,
-                    bordercolor=BG3, lightcolor=BG3, darkcolor=BG3)
+                    bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER)
     style.configure("TCombobox", fieldbackground=BG3, foreground=FG,
                     selectbackground=BG3, selectforeground=FG,
-                    background=BG3, arrowcolor=FG)
+                    background=BG3, arrowcolor=FG2, bordercolor=BORDER)
     style.map("TCombobox",
               fieldbackground=[("readonly", BG3)],
               foreground=[("readonly", FG)],
               selectbackground=[("readonly", BG3)])
-    style.configure("TNotebook", background=BG, bordercolor=BG3, tabmargins=[0, 0, 0, 0])
-    style.configure("TNotebook.Tab", background=BG3, foreground=FG,
-                    padding=[12, 4], borderwidth=0)
+    style.configure("TNotebook", background=BG, borderwidth=0, tabmargins=[0, 0, 0, 0])
+    style.configure("TNotebook.Tab", background=BG, foreground=DIM,
+                    padding=[16, 8], borderwidth=0)
     style.map("TNotebook.Tab",
-              background=[("selected", ACCENT)],
-              foreground=[("selected", "#ffffff")])
+              background=[("selected", "#241f17"), ("active", BG2)],
+              foreground=[("selected", ACCENT), ("active", FG)],
+              bordercolor=[("selected", ACCENT)],
+              lightcolor=[("selected", ACCENT)])
     style.configure("Treeview", background=BG2, foreground=FG,
-                    fieldbackground=BG2, rowheight=22,
-                    bordercolor=BG3)
-    style.configure("Treeview.Heading", background=BG3, foreground=FG2,
-                    relief="flat", borderwidth=0)
+                    fieldbackground=BG2, rowheight=24,
+                    bordercolor=BORDER, font=F_MONO)
+    style.configure("Treeview.Heading", background=BG2, foreground=FG2,
+                    relief="flat", borderwidth=0, font=(UIF, 8, "bold"))
     style.map("Treeview",
               background=[("selected", TREE_SEL)],
               foreground=[("selected", "#ffffff")])
     style.configure("Vertical.TScrollbar", background=BG3, troughcolor=BG,
-                    arrowcolor=FG, bordercolor=BG3)
+                    arrowcolor=FG2, bordercolor=BG3)
     style.configure("Horizontal.TScrollbar", background=BG3, troughcolor=BG,
-                    arrowcolor=FG, bordercolor=BG3)
-    style.configure("TScale", background=BG, troughcolor=BG3, slidercolor=ACCENT)
-    style.configure("TLabelframe", background=BG, bordercolor=BG3)
+                    arrowcolor=FG2, bordercolor=BG3)
+    style.configure("Horizontal.TScale", background=ACCENT, troughcolor=BG3)
+    style.configure("TLabelframe", background=BG, bordercolor=BORDER)
     style.configure("TLabelframe.Label", background=BG, foreground=FG2)
 
     # ---- Header ----
-    header = tk.Frame(root, bg=BG3, height=48)
+    header = tk.Frame(root, bg=BG2, height=54)
     header.pack(fill=tk.X, side=tk.TOP)
     header.pack_propagate(False)
 
-    status_dot = tk.Label(header, text="●", fg=RED, bg=BG3, font=("Segoe UI", 14))
-    status_dot.pack(side=tk.LEFT, padx=(12, 4), pady=8)
+    tk.Label(header, text="MiniPACS", fg="#f2f3f4", bg=BG2,
+             font=(UIF, 12, "bold")).pack(side=tk.LEFT, padx=(18, 14), pady=8)
 
-    header_info = tk.Label(header, text="AE: MINIPACS | Port: 11112 | CS: ISO_IR 192",
-                           fg=FG2, bg=BG3, font=("Segoe UI", 10))
-    header_info.pack(side=tk.LEFT, padx=4)
+    status_pill = tk.Frame(header, bg=BG3)
+    status_pill.pack(side=tk.LEFT, pady=12)
+    status_dot = tk.Label(status_pill, text="●", fg=RED, bg=BG3,
+                          font=(UIF, 9))
+    status_dot.pack(side=tk.LEFT, padx=(9, 4), pady=3)
+    status_txt = tk.Label(status_pill, text="STOPPED", fg=FG2, bg=BG3,
+                          font=(UIF, 8, "bold"))
+    status_txt.pack(side=tk.LEFT, padx=(0, 10), pady=3)
 
-    btn_start = ttk.Button(header, text="▶ Start Server")
-    btn_stop = ttk.Button(header, text="■ Stop Server")
-    btn_start.pack(side=tk.RIGHT, padx=4, pady=8)
-    btn_stop.pack(side=tk.RIGHT, padx=4, pady=8)
+    header_info = tk.Label(header, text="AE  MINIPACS     PORT  11112     CS  ISO_IR 192",
+                           fg=FG2, bg=BG2, font=(MONO, 9))
+    header_info.pack(side=tk.LEFT, padx=16)
+
+    btn_start = ttk.Button(header, text="Start Server", style="Accent.TButton")
+    btn_stop = ttk.Button(header, text="Stop")
+    btn_start.pack(side=tk.RIGHT, padx=(4, 18), pady=10)
+    btn_stop.pack(side=tk.RIGHT, padx=4, pady=10)
 
     # ---- Main notebook ----
     notebook = ttk.Notebook(root)
@@ -865,13 +900,13 @@ def run_gui():
     sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y)
     sidebar_frame.pack_propagate(False)
 
-    tk.Label(sidebar_frame, text="Metadata", bg=BG2, fg=FG2,
-             font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=6, pady=4)
+    tk.Label(sidebar_frame, text="METADATA", bg=BG2, fg=FG2,
+             font=(UIF, 8, "bold")).pack(anchor="w", padx=8, pady=6)
 
-    meta_text = scrolledtext.ScrolledText(sidebar_frame, bg=BG2, fg=FG,
-                                          font=("Courier New", 8),
+    meta_text = scrolledtext.ScrolledText(sidebar_frame, bg=BG2, fg="#b9bbc0",
+                                          font=F_MONO_SM, insertbackground=FG,
                                           state="disabled", width=28,
-                                          wrap=tk.WORD)
+                                          wrap=tk.WORD, relief="flat", bd=0)
     meta_text.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
     def toggle_sidebar():
@@ -1327,11 +1362,11 @@ def run_gui():
     notebook.add(tab_log, text="  Log  ")
 
     log_text = scrolledtext.ScrolledText(
-        tab_log, bg="#0a0a0a", fg="#00ff41",
-        font=("Courier New", 9), state="disabled",
-        wrap=tk.WORD
+        tab_log, bg="#0d0e10", fg="#7fd6a0",
+        font=F_MONO, state="disabled", wrap=tk.WORD,
+        relief="flat", bd=0, insertbackground=FG, padx=10, pady=8
     )
-    log_text.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
+    log_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
     def clear_log():
         log_text.config(state="normal")
@@ -1348,7 +1383,12 @@ def run_gui():
         port = port_var.get()
         cs_disp = cs_var.get()
         cs_val = CHAR_SET_VALUES.get(cs_disp, "ISO_IR 192")
-        header_info.config(text=f"AE: {ae} | Port: {port} | CS: {cs_val or 'ASCII'}")
+        header_info.config(text=f"AE  {ae}     PORT  {port}     CS  {cs_val or 'ASCII'}")
+
+    def set_status(running):
+        status_dot.config(fg=GREEN if running else RED)
+        status_txt.config(text="RUNNING" if running else "STOPPED",
+                          fg=GREEN if running else FG2)
 
     def on_cs_change(event=None):
         cs_disp = cs_var.get()
@@ -1370,12 +1410,12 @@ def run_gui():
             ok = start_server(ae_title, int(port))
             def _upd():
                 if ok:
-                    status_dot.config(fg=GREEN)
+                    set_status(True)
                     btn_start.config(state="disabled")
                     btn_stop.config(state="normal")
                     update_header()
                 else:
-                    status_dot.config(fg=RED)
+                    set_status(False)
             root.after(0, _upd)
         threading.Thread(target=_start, daemon=True).start()
 
@@ -1383,7 +1423,7 @@ def run_gui():
         def _stop():
             stop_server()
             def _upd():
-                status_dot.config(fg=RED)
+                set_status(False)
                 btn_start.config(state="normal")
                 btn_stop.config(state="disabled")
             root.after(0, _upd)
