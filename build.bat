@@ -1,56 +1,40 @@
 @echo off
 REM ============================================================
-REM MiniPACS – PyInstaller build script
+REM MiniPACS - PyInstaller build script (Windows)
+REM
+REM Builds a single self-contained windowed EXE from the
+REM packaging config in MiniPACS.spec (the source of truth).
+REM
 REM Output: dist\MiniPACS.exe
 REM ============================================================
 
-echo [BUILD] Installing/upgrading dependencies...
-pip install --upgrade pynetdicom pydicom Pillow pyinstaller
+setlocal
+
+echo [BUILD] Installing/upgrading build dependencies...
+pip install --upgrade pynetdicom pydicom Pillow numpy pyinstaller
+if errorlevel 1 (
+    echo [BUILD] ERROR - dependency installation failed
+    exit /b 1
+)
 
 echo.
-echo [BUILD] Running PyInstaller...
-
-pyinstaller ^
-    --onefile ^
-    --windowed ^
-    --name MiniPACS ^
-    --hidden-import pynetdicom ^
-    --hidden-import pynetdicom.sop_class ^
-    --hidden-import pynetdicom._handlers ^
-    --hidden-import pynetdicom.transport ^
-    --hidden-import pynetdicom.events ^
-    --hidden-import pynetdicom.association ^
-    --hidden-import pynetdicom.presentation ^
-    --hidden-import pydicom ^
-    --hidden-import pydicom.dataset ^
-    --hidden-import pydicom.sequence ^
-    --hidden-import pydicom.uid ^
-    --hidden-import pydicom.data ^
-    --hidden-import pydicom._storage_sopclass_uids ^
-    --hidden-import PIL ^
-    --hidden-import PIL.Image ^
-    --hidden-import PIL.ImageTk ^
-    --hidden-import PIL.ImageOps ^
-    --hidden-import tkinter ^
-    --hidden-import tkinter.ttk ^
-    --hidden-import tkinter.scrolledtext ^
-    --hidden-import tkinter.filedialog ^
-    --hidden-import tkinter.messagebox ^
-    --hidden-import numpy ^
-    --collect-all pynetdicom ^
-    --collect-all pydicom ^
-    --collect-all PIL ^
-    mini_pacs_server.py
+echo [BUILD] Running PyInstaller (MiniPACS.spec)...
+pyinstaller --noconfirm --clean MiniPACS.spec
+if errorlevel 1 (
+    echo [BUILD] ERROR - PyInstaller failed, check output above
+    exit /b 1
+)
 
 echo.
 if exist dist\MiniPACS.exe (
-    echo [BUILD] SUCCESS – dist\MiniPACS.exe created
+    echo [BUILD] SUCCESS - dist\MiniPACS.exe created
     for %%A in (dist\MiniPACS.exe) do echo [BUILD] Size: %%~zA bytes
 ) else (
-    echo [BUILD] ERROR – dist\MiniPACS.exe not found, check output above
+    echo [BUILD] ERROR - dist\MiniPACS.exe not found, check output above
     exit /b 1
 )
 
 echo.
 echo [BUILD] Done.
-pause
+if "%1"=="" pause
+endlocal

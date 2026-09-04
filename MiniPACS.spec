@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = []
 binaries = []
-hiddenimports = ['pynetdicom', 'pynetdicom.sop_class', 'pynetdicom._handlers', 'pynetdicom.transport', 'pynetdicom.events', 'pynetdicom.association', 'pynetdicom.presentation', 'pydicom', 'pydicom.dataset', 'pydicom.sequence', 'pydicom.uid', 'pydicom.data', 'pydicom._storage_sopclass_uids', 'PIL', 'PIL.Image', 'PIL.ImageTk', 'PIL.ImageOps', 'tkinter', 'tkinter.ttk', 'tkinter.scrolledtext', 'tkinter.filedialog', 'tkinter.messagebox', 'numpy']
+hiddenimports = ['pynetdicom', 'pynetdicom.sop_class', 'pynetdicom._handlers', 'pynetdicom.transport', 'pynetdicom.events', 'pynetdicom.association', 'pynetdicom.presentation', 'pydicom', 'pydicom.dataset', 'pydicom.sequence', 'pydicom.uid', 'pydicom.data', 'PIL', 'PIL.Image', 'PIL.ImageTk', 'tkinter', 'tkinter.ttk', 'tkinter.scrolledtext', 'tkinter.filedialog', 'tkinter.messagebox', 'numpy']
 tmp_ret = collect_all('pynetdicom')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('pydicom')
