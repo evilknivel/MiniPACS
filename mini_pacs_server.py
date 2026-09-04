@@ -9,12 +9,8 @@ import sys
 import threading
 import time
 import datetime
-import uuid
-import copy
 import queue
 import tempfile
-import struct
-import io
 from collections import OrderedDict
 
 # ---------------------------------------------------------------------------
@@ -25,20 +21,18 @@ try:
     from pydicom.dataset import Dataset, FileDataset
     from pydicom.sequence import Sequence
     from pydicom.uid import generate_uid
-    import pydicom.uid as uid_mod
 except ImportError:
     print("ERROR: pydicom is not installed. Run: pip install pydicom")
     sys.exit(1)
 
 try:
     import pynetdicom
-    from pynetdicom import AE, evt, StoragePresentationContexts, AllStoragePresentationContexts
+    from pynetdicom import AE, evt, AllStoragePresentationContexts
     from pynetdicom.sop_class import (
         ModalityWorklistInformationFind,
         ModalityPerformedProcedureStep,
         Verification,
     )
-    from pynetdicom import _config as pn_config
 except ImportError:
     print("ERROR: pynetdicom is not installed. Run: pip install pynetdicom")
     sys.exit(1)
@@ -89,8 +83,12 @@ server_handle = {"ae": None, "running": False}
 gui_callbacks = {
     "on_store": None,
     "on_mpps": None,
-    "on_log": None,
 }
+
+
+def now_str():
+    """Timestamp for entry/file records: 'YYYY-MM-DD HH:MM:SS'."""
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def log(msg):
@@ -175,7 +173,9 @@ SAMPLE_WORKLIST = [
 
 def make_worklist_dataset(entry):
     ds = Dataset()
-    ds.SpecificCharacterSet = active_char_set["value"] or None
+    cs = active_char_set["value"]
+    if cs:
+        ds.SpecificCharacterSet = cs
     ds.PatientName = entry.get("PatientName", "")
     ds.PatientID = entry.get("PatientID", "")
 
@@ -192,10 +192,6 @@ def make_worklist_dataset(entry):
     ds.AccessionNumber = entry.get("AccessionNumber", "")
     ds.RequestedProcedureDescription = entry.get("Description", "")
     ds.RequestedProcedureID = entry.get("AccessionNumber", "")
-
-    if ds.SpecificCharacterSet is None:
-        if hasattr(ds, 'SpecificCharacterSet'):
-            del ds.SpecificCharacterSet
     return ds
 
 
@@ -228,38 +224,21 @@ def handle_find(event):
     with worklist_lock:
         entries = list(worklist_entries)
 
+    mod_want = mod_filter.upper()
     for entry in entries:
         try:
-            ds = make_worklist_dataset(entry)
+            # Filter on the source entry before building a Dataset
+            if mod_want and mod_want != str(entry.get("Modality", "")).strip().upper():
+                continue
+            if date_filter and date_filter != str(entry.get("Date", "")).strip():
+                continue
 
-            # Apply Modality filter
-            if mod_filter:
-                ds_mod = ""
-                if hasattr(ds, "ScheduledProcedureStepSequence") and ds.ScheduledProcedureStepSequence:
-                    ds_mod = str(ds.ScheduledProcedureStepSequence[0].Modality).strip()
-                if mod_filter.upper() != ds_mod.upper():
-                    continue
-
-            # Apply date filter
-            if date_filter:
-                ds_date = ""
-                if hasattr(ds, "ScheduledProcedureStepSequence") and ds.ScheduledProcedureStepSequence:
-                    ds_date = str(ds.ScheduledProcedureStepSequence[0].ScheduledProcedureStepStartDate).strip()
-                if date_filter != ds_date:
-                    continue
-
-            # Inject active character set
-            cs = active_char_set["value"]
-            if cs:
-                ds.SpecificCharacterSet = cs
-            elif hasattr(ds, 'SpecificCharacterSet'):
-                del ds.SpecificCharacterSet
-
-            yield (0xFF00, ds)
+            # make_worklist_dataset already applies the active character set
+            yield (0xFF00, make_worklist_dataset(entry))
         except Exception as e:
             log(f"[MWL] Error building response: {e}")
 
-    log(f"[MWL] C-FIND complete")
+    log("[MWL] C-FIND complete")
 
 
 def handle_store(event):
@@ -269,8 +248,8 @@ def handle_store(event):
         ds.file_meta = event.file_meta
         sop_uid = str(ds.SOPInstanceUID) if hasattr(ds, 'SOPInstanceUID') else generate_uid()
         fname = f"{sop_uid}.dcm"
-        fpath = os.path.join(storage_dir, fname)
         os.makedirs(storage_dir, exist_ok=True)
+        fpath = os.path.join(storage_dir, fname)
 
         pydicom.dcmwrite(fpath, ds)
         fsize = os.path.getsize(fpath)
@@ -294,7 +273,7 @@ def handle_store(event):
             "modality": modality,
             "patient_name": patient_name,
             "acc_no": acc_no,
-            "received_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "received_at": now_str(),
         }
         with received_files_lock:
             received_files.append(file_info)
@@ -316,19 +295,16 @@ def handle_n_create(event):
 
         patient_name = str(ds.PatientName) if hasattr(ds, 'PatientName') else ""
         acc_no = ""
-        status = "IN PROGRESS"
 
         if hasattr(ds, 'ScheduledStepAttributesSequence') and ds.ScheduledStepAttributesSequence:
             item = ds.ScheduledStepAttributesSequence[0]
             acc_no = str(item.AccessionNumber) if hasattr(item, 'AccessionNumber') else ""
 
-        # Check linking
-        linked = False
+        # Check linking against the worklist
         with worklist_lock:
-            for entry in worklist_entries:
-                if entry.get("AccessionNumber", "") == acc_no and acc_no:
-                    linked = True
-                    break
+            linked = bool(acc_no) and any(
+                e.get("AccessionNumber", "") == acc_no for e in worklist_entries
+            )
 
         if linked:
             log(f"[MPPS] N-CREATE LINKED – AccNo {acc_no}")
@@ -339,10 +315,10 @@ def handle_n_create(event):
             "uid": uid,
             "uid_short": uid[-12:] if len(uid) > 12 else uid,
             "patient_name": patient_name,
-            "status": status,
+            "status": "IN PROGRESS",
             "acc_no": acc_no,
             "linked": linked,
-            "start_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "start_time": now_str(),
             "end_time": "",
         }
 
@@ -375,7 +351,7 @@ def handle_n_set(event):
                 if status:
                     mpps_entries[uid]["status"] = status
                     if status in ("COMPLETED", "DISCONTINUED"):
-                        mpps_entries[uid]["end_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        mpps_entries[uid]["end_time"] = now_str()
                 entry = mpps_entries[uid]
             else:
                 entry = None
@@ -494,6 +470,7 @@ def run_headless():
 def run_gui():
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, scrolledtext
+    import numpy as np
 
     # ---- Dark theme colors ----
     BG = "#1e1e1e"
@@ -568,10 +545,6 @@ def run_gui():
 
     status_dot = tk.Label(header, text="●", fg=RED, bg=BG3, font=("Segoe UI", 14))
     status_dot.pack(side=tk.LEFT, padx=(12, 4), pady=8)
-
-    header_ae_var = tk.StringVar(value="MINIPACS")
-    header_port_var = tk.StringVar(value="11112")
-    header_cs_var = tk.StringVar(value="ISO_IR 192")
 
     header_info = tk.Label(header, text="AE: MINIPACS | Port: 11112 | CS: ISO_IR 192",
                            fg=FG2, bg=BG3, font=("Segoe UI", 10))
@@ -713,17 +686,16 @@ def run_gui():
     for col in wl_cols:
         wl_tree.heading(col, text=col)
         wl_tree.column(col, width=col_widths.get(col, 100), minwidth=60)
+    wl_tree.tag_configure("even", background=TREE_ROW1)
+    wl_tree.tag_configure("odd", background=TREE_ROW2)
 
     def refresh_worklist_tree():
-        for item in wl_tree.get_children():
-            wl_tree.delete(item)
+        wl_tree.delete(*wl_tree.get_children())
         with worklist_lock:
             for i, e in enumerate(worklist_entries):
                 tag = "even" if i % 2 == 0 else "odd"
                 wl_tree.insert("", "end", tag=tag,
                                values=[e.get(c, "") for c in wl_cols])
-        wl_tree.tag_configure("even", background=TREE_ROW1)
-        wl_tree.tag_configure("odd", background=TREE_ROW2)
 
     # ===========================================================
     # TAB 2: MPPS
@@ -752,8 +724,7 @@ def run_gui():
     mpps_tree.tag_configure("unlinked", background="#3a2a1a")
 
     def refresh_mpps_tree():
-        for item in mpps_tree.get_children():
-            mpps_tree.delete(item)
+        mpps_tree.delete(*mpps_tree.get_children())
         with mpps_lock:
             entries = list(mpps_entries.values())
         for e in entries:
@@ -808,10 +779,11 @@ def run_gui():
     for col in files_cols:
         files_tree.heading(col, text=col)
         files_tree.column(col, width=files_col_widths.get(col, 100), minwidth=60)
+    files_tree.tag_configure("even", background=TREE_ROW1)
+    files_tree.tag_configure("odd", background=TREE_ROW2)
 
     def refresh_files_tree():
-        for item in files_tree.get_children():
-            files_tree.delete(item)
+        files_tree.delete(*files_tree.get_children())
         with received_files_lock:
             for i, f in enumerate(received_files):
                 tag = "even" if i % 2 == 0 else "odd"
@@ -822,8 +794,6 @@ def run_gui():
                     f["patient_name"],
                     f["received_at"],
                 ])
-        files_tree.tag_configure("even", background=TREE_ROW1)
-        files_tree.tag_configure("odd", background=TREE_ROW2)
 
     # ===========================================================
     # TAB 4: DICOM Viewer
@@ -843,10 +813,9 @@ def run_gui():
         "pan_x": 0,
         "pan_y": 0,
         "drag_start": None,
-        "wc": 128,
-        "ww": 256,
         "tk_image": None,
         "after_id": None,
+        "wl_after_id": None,
         "filepath": None,
         "is_encapsulated_video": False,
     }
@@ -1043,18 +1012,13 @@ def run_gui():
                 messagebox.showerror("Error", "Could not decode pixel data.", parent=root)
                 return
 
-            n_frames = 1
-            if hasattr(ds, "NumberOfFrames"):
-                try:
-                    n_frames = int(ds.NumberOfFrames)
-                except Exception:
-                    pass
-            if len(px.shape) == 3 and n_frames == 1:
-                # Could be multi-frame grayscale or RGB
-                if px.shape[2] in (3, 4):
-                    n_frames = 1  # RGB single frame
-                else:
-                    n_frames = px.shape[0]
+            try:
+                n_frames = int(getattr(ds, "NumberOfFrames", 1) or 1)
+            except Exception:
+                n_frames = 1
+            # 3D array with a non-RGB last axis => multi-frame grayscale
+            if n_frames == 1 and px.ndim == 3 and px.shape[2] not in (3, 4):
+                n_frames = px.shape[0]
 
             viewer_state["pixel_array"] = px
             viewer_state["n_frames"] = n_frames
@@ -1078,7 +1042,6 @@ def run_gui():
 
     def apply_windowing(arr_2d, wc, ww):
         """Apply window/level to a 2D array, return uint8."""
-        import numpy as np
         lo = wc - ww / 2.0
         hi = wc + ww / 2.0
         arr = arr_2d.astype(float)
@@ -1092,7 +1055,6 @@ def run_gui():
         if ds is None or px is None:
             return
         try:
-            import numpy as np
             frame_idx = viewer_state["current_frame"]
             n_frames = viewer_state["n_frames"]
 
@@ -1161,15 +1123,11 @@ def run_gui():
 
     def viewer_auto_wl_from_array(px):
         try:
-            import numpy as np
-            flat = px.flatten().astype(float)
-            mn, mx = flat.min(), flat.max()
+            mn, mx = float(px.min()), float(px.max())
             wc = int((mn + mx) / 2)
             ww = max(1, int(mx - mn))
             wc_var.set(wc)
             ww_var.set(ww)
-            viewer_state["wc"] = wc
-            viewer_state["ww"] = ww
         except Exception:
             pass
 
@@ -1214,7 +1172,6 @@ def run_gui():
         if not fp:
             return
         try:
-            import numpy as np
             frame_idx = viewer_state["current_frame"]
             n_frames = viewer_state["n_frames"]
             if n_frames > 1 and len(px.shape) == 3 and px.shape[2] not in (3, 4):
@@ -1304,7 +1261,10 @@ def run_gui():
     root.bind("<space>", lambda e: viewer_toggle_play())
 
     def on_wl_change(event=None):
-        viewer_render_frame()
+        # Debounce: slider drags fire many events; render once they settle
+        if viewer_state["wl_after_id"]:
+            root.after_cancel(viewer_state["wl_after_id"])
+        viewer_state["wl_after_id"] = root.after(50, viewer_render_frame)
 
     def on_preset_change(event=None):
         pname = preset_var.get()
@@ -1436,17 +1396,17 @@ def run_gui():
     # GUI update loop (poll queues)
     # ===========================================================
     def poll_log():
-        changed = False
-        while not log_queue.empty():
+        msgs = []
+        while True:
             try:
-                msg = log_queue.get_nowait()
-                log_text.config(state="normal")
-                log_text.insert("end", msg + "\n")
-                log_text.see("end")
-                log_text.config(state="disabled")
-                changed = True
+                msgs.append(log_queue.get_nowait())
             except queue.Empty:
                 break
+        if msgs:
+            log_text.config(state="normal")
+            log_text.insert("end", "\n".join(msgs) + "\n")
+            log_text.see("end")
+            log_text.config(state="disabled")
         root.after(200, poll_log)
 
     def on_store_cb(file_info):
@@ -1468,8 +1428,9 @@ def run_gui():
     def on_close():
         if server_handle["running"]:
             stop_server()
-        if viewer_state["after_id"]:
-            root.after_cancel(viewer_state["after_id"])
+        for key in ("after_id", "wl_after_id"):
+            if viewer_state[key]:
+                root.after_cancel(viewer_state[key])
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
