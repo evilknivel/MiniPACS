@@ -351,12 +351,17 @@ Useful as a background service in integration pipelines:
 ### Using the batch script
 
 ```
-build.bat
+.\build.bat
 ```
 
 It upgrades the build dependencies, runs PyInstaller with the required hidden
 imports and `--collect-all` for the DICOM/imaging packages, and verifies that
 `dist\MiniPACS.exe` was produced.
+
+> Call the scripts as `.\build.bat` / `.\release.bat` (with the leading `.\`).
+> On hardened Windows setups `cmd` does not search the current directory for
+> executables, so a bare `build.bat` reports "not found". Double-clicking from
+> Explorer works regardless.
 
 ### Using the spec file
 
@@ -374,7 +379,7 @@ installation required on the target machine.
 ### Packaging a release ZIP
 
 ```
-release.bat 1.2.0
+.\release.bat 1.2.0
 ```
 
 Builds the EXE, then bundles it with `README.md`, `LICENSE`, `NOTICE.txt`, and
